@@ -23,6 +23,7 @@ rule all:
 	expand("krona_charts/{sample}_krona.html", sample=SAMPLES),
 	expand("extracted_reads/{sample}_R1_extracted_reads.fastq", sample=SAMPLES),
         expand("extracted_reads/{sample}_R2_extracted_reads.fastq", sample=SAMPLES)
+
 # Since the genome is manually downloaded, the download rule is removed.
 
 # Decompression step is removed if your genome is already in .fna (uncompressed) format.
