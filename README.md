@@ -38,7 +38,7 @@ Note that Snakemake is available via Bioconda for historical, reproducibility, a
 mamba activate base
 mamba create -n some-env -c conda-forge bioconda::snakemake ...
 ```
-## The Snakefile workflow overview
+## The Snakemake metagenomics workflow overview
 
 This project demonstrates a metagenomics analysis pipeline using Snakemake. Below you will find the main components of the pipeline.
 
