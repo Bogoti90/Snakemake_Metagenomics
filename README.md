@@ -38,10 +38,33 @@ Note that Snakemake is available via Bioconda for historical, reproducibility, a
 mamba activate base
 mamba create -n some-env -c conda-forge bioconda::snakemake ...
 ```
-## The Snakefile workflow
+## The Snakefile workflow overview
 
-The Dag file
-![DAG Image](rulegraph.png)
+This project demonstrates a metagenomics analysis pipeline using Snakemake. Below you will find the main components of the pipeline.
 
+## Project Structure
+
+- **DAG Visualization**: 
+  ![DAG Image](rulegraph.png)
+
+- **Pipeline Script**: 
+  You can find the main pipeline script in the [Snakefile](Snakefile).
+
+## Usage
+To run the pipeline, use the following command (if use Conda/mamba):
+```
+snakemake --cores 4
+```
+## Contributing
+Please feel free to contribute to this project by submitting issues or pull requests.
+
+## License
+This project is licensed under the MIT License.
+
+## Author
+
+* Brian M Ogoti
+* Web: [The Center for Epidemiological Modelling and Analysis CEMA](https://cema-africa.uonbi.ac.ke/people/epidemiology/brian-maina) 
+* Twitter: [@diyobraz2](https://x.com/diyobraz2)
 
 
