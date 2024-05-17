@@ -40,8 +40,8 @@ mamba create -n some-env -c conda-forge bioconda::snakemake ...
 ```
 ## The Snakefile workflow
 
-### The Dag file
-![DAG Image](dag.png)
+The Dag file
+![DAG Image](rulegraph.png)
 
 
 
