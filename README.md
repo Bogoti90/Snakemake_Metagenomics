@@ -38,6 +38,10 @@ Note that Snakemake is available via Bioconda for historical, reproducibility, a
 mamba activate base
 mamba create -n some-env -c conda-forge bioconda::snakemake ...
 ```
+## The Snakefile workflow
+
+### The Dag file
+![DAG Image](dag.png)
 
 
 
