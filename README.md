@@ -19,36 +19,23 @@ conda install -n base -c conda-forge mamba
 
 ### Full installation
 Snakemake can be installed with all goodies needed to run in any environment and for creating interactive reports via
-
+```
 mamba create -c conda-forge -c bioconda -n snakemake snakemake
+```
 
 from the Bioconda channel. This will install snakemake into an isolated software environment, that has to be activated with
-
+```
 mamba activate snakemake
 snakemake --help
-
+```
 Installing into isolated environments is best practice in order to avoid side effects with other packages.
 
 Notes on Bioconda as a package source
 Note that Snakemake is available via Bioconda for historical, reproducibility, and continuity reasons (although it is not limited to biology applications at all). However, it is easy to combine Snakemake installation with other channels, e.g., by prefixing the package name with ::bioconda, i.e.,
-
+```
 mamba activate base
 mamba create -n some-env -c conda-forge bioconda::snakemake ...
-Copy code
-Installation via pip
-Instead of conda, snakemake can be installed with pip. However, note that snakemake has non-python dependencies, such that the pip based installation has a limited functionality if those dependencies are not manually installed in addition.
-
-A list of Snakemake’s dependencies can be found within its meta.yaml conda recipe.
-
-Installation of a development version via pip
-If you want to quickly try out an unreleased version from the snakemake repository (which you cannot get via bioconda, yet), for example to check whether a bug fix works for you workflow, you can get the current state of the main branch with:
-
-mamba create --only-deps -n snakemake-dev snakemake
-mamba activate snakemake-dev
-pip install git+https://github.com/snakemake/snakemake
-Copy code
-You can also install the current state of another branch or the repository state at a particular commit. For information on the syntax for this, see the pip documentation on git support.
-
+```
 
 
 
