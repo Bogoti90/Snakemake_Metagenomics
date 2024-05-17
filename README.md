@@ -1,8 +1,7 @@
-# Eco-MERS Snakemake Metagenomics workflow
+# A Snakemake Metagenomics workflow
 
 ## Introduction
 A detailed metagenomics workflow for analysis Illumina reads processed from wildlife samples collected in Afar region of Ethiopia. 
-
 
 ### Installation
 Snakemake installation (Source - Snakemake 8.11.6 documentation [https://snakemake.readthedocs.io/en/stable/getting_started/installation.html])
@@ -38,11 +37,10 @@ Note that Snakemake is available via Bioconda for historical, reproducibility, a
 mamba activate base
 mamba create -n some-env -c conda-forge bioconda::snakemake ...
 ```
-## The Snakemake metagenomics workflow overview
+## Project Structure overview
 
 This project demonstrates a metagenomics analysis pipeline using Snakemake. Below you will find the main components of the pipeline.
 
-## Project Structure
 
 - **DAG Visualization**: 
   ![DAG Image](rulegraph.png)
