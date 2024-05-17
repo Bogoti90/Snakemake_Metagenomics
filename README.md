@@ -3,6 +3,8 @@
 ## Introduction
 A detailed metagenomics workflow for analysis Illumina reads processed from wildlife samples collected in Afar region of Ethiopia. 
 
+
+### Installation
 Snakemake installation (Source - Snakemake 8.11.6 documentation [https://snakemake.readthedocs.io/en/stable/getting_started/installation.html])
 
 Snakemake is available on PyPi as well as through Bioconda and also from source code. You can use one of the following ways for installing Snakemake.
