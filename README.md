@@ -51,7 +51,7 @@ This project demonstrates a metagenomics analysis pipeline using Snakemake. Belo
   You can find the main pipeline script in the [Snakefile](snakefile).
 
 ## Usage
-To run the pipeline, use the following command (if use Conda/mamba):
+To run the pipeline, use the following command (Conda/mamba):
 ```
 snakemake --cores 4
 ```
