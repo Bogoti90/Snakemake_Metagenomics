@@ -48,7 +48,7 @@ This project demonstrates a metagenomics analysis pipeline using Snakemake. Belo
   ![DAG Image](rulegraph.png)
 
 - **Pipeline Script**: 
-  You can find the main pipeline script in the [Snakefile](Snakefile).
+  You can find the main pipeline script in the [Snakefile](snakefile).
 
 ## Usage
 To run the pipeline, use the following command (if use Conda/mamba):
