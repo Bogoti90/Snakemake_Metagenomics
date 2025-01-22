@@ -1,0 +1,22 @@
+#config.yaml
+
+# Threads for different tools
+threads:
+  bowtie2_build: 4
+  bowtie2: 8
+  samtools: 4
+  spades: 48
+  kaiju: 24
+  centrifuge: 34
+
+# Memory requirements (GB)
+memory:
+  spades: 132
+
+# Tool-specific parameters
+params:
+  kaiju_evalue: "1e-05"
+  min_contig_length: 1000
+
+
+____
