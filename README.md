@@ -116,6 +116,55 @@ snakemake --cluster "sbatch --mem=100g" --jobs 100
 └── assembly_stats/         # Assembly statistics
 ```
 
+## Workflow Visualization
+
+The pipeline's workflow is visualized as a Directed Acyclic Graph (DAG), color-coded by process type:
+
+🔴 **Host Removal** (Pink)
+- Host genome indexing
+- Read mapping
+- Unmapped read extraction
+
+🟢 **Taxonomic Classification** (Green)
+- Kaiju analysis
+- Centrifuge classification
+- Taxonomic summary generation
+
+🔵 **Assembly** (Blue)
+- MetaSPAdes assembly
+- Assembly database creation
+
+🟣 **Mapping** (Purple)
+- Read mapping to assemblies
+- BAM file processing
+- Coverage analysis
+
+🟡 **CyB Analysis** (Yellow)
+- Cytochrome B read extraction
+- Targeted assembly
+
+🟠 **Visualization** (Orange)
+- Krona chart generation
+- Assembly statistics
+
+### Generating the DAG
+
+To generate the workflow visualization:
+
+```bash
+# Install graphviz if not already installed
+conda install graphviz
+
+# Generate basic DAG
+snakemake --dag | dot -Tpng > dag_raw.png
+
+# Generate styled DAG (using provided script)
+python generate_dag.py
+
+# The styled DAG will be saved as dag_styled.png
+```
+
+
 ## Troubleshooting
 
 Common issues and solutions:
