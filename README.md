@@ -172,12 +172,6 @@ Common issues and solutions:
 2. **Database Errors**: Verify database paths and formats
 3. **Missing Files**: Check input file naming conventions
 
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Submit a pull request
-
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
