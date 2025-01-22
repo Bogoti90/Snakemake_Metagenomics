@@ -1,68 +1,143 @@
-# A Snakemake Metagenomics workflow
+# Wildlife Metagenomics Analysis Pipeline
 
-## Introduction
-A detailed metagenomics workflow for analysis Illumina reads processed from wildlife samples collected in Afar region of Ethiopia. 
+A Snakemake workflow for analyzing metagenomic data from wildlife samples collected in the Afar region of Ethiopia.
 
-### Installation
-Snakemake installation (Source - Snakemake 8.11.6 documentation [https://snakemake.readthedocs.io/en/stable/getting_started/installation.html])
+## Overview
 
-Snakemake is available on PyPi as well as through Bioconda and also from source code. You can use one of the following ways for installing Snakemake.
+This pipeline performs:
+- Host read removal
+- Taxonomic classification (Kaiju, Centrifuge)
+- Metagenomic assembly (MetaSPAdes)
+- Read mapping and coverage analysis
+- Cytochrome B gene analysis
+- Taxonomic visualization (Krona)
 
-### Installation via Conda/Mamba
-This is the recommended way to install Snakemake, because it also enables Snakemake to handle software dependencies of your workflow.
+## Requirements
 
-First, you need to install a Conda-based Python3 distribution. The recommended choice is Mambaforge which not only provides the required Python and Conda commands, but also includes Mamba an extremely fast and robust replacement for the Conda package manager which is highly recommended. The default conda solver is a bit slow and sometimes has issues with selecting the latest package releases. Therefore, we recommend to in any case use Mamba.
+### Software Dependencies
+- Python ≥3.9
+- Snakemake ≥8.11.6
+- Mamba/Conda
+- Required tools (automatically installed via conda environments):
+  - Bowtie2
+  - Samtools
+  - SPAdes
+  - Kaiju
+  - Centrifuge
+  - Krona
+  - seqtk
 
-In case you don’t use Mambaforge you can always install Mamba into any other Conda-based Python distribution with
-```
+### Input Data Requirements
+- Paired-end Illumina reads (FASTQ format)
+- Host genome reference
+- Kaiju database
+- Centrifuge database
+
+## Installation
+
+### 1. Install Mamba (Recommended)
+```bash
+# Install Mambaforge if you don't have it
+wget https://github.com/conda-forge/miniforge/releases/latest/download/Mambaforge-Linux-x86_64.sh
+bash Mambaforge-Linux-x86_64.sh
+
+# Or install mamba into existing conda
 conda install -n base -c conda-forge mamba
 ```
 
-### Full installation
-Snakemake can be installed with all goodies needed to run in any environment and for creating interactive reports via
-```
+### 2. Create Snakemake Environment
+```bash
+# Create and activate environment
 mamba create -c conda-forge -c bioconda -n snakemake snakemake
-```
-
-from the Bioconda channel. This will install snakemake into an isolated software environment, that has to be activated with
-```
 mamba activate snakemake
-snakemake --help
 ```
-Installing into isolated environments is best practice in order to avoid side effects with other packages.
 
-Notes on Bioconda as a package source
-Note that Snakemake is available via Bioconda for historical, reproducibility, and continuity reasons (although it is not limited to biology applications at all). However, it is easy to combine Snakemake installation with other channels, e.g., by prefixing the package name with ::bioconda, i.e.,
+### 3. Clone Repository
+```bash
+git clone https://github.com/your-username/wildlife-metagenomics.git
+cd wildlife-metagenomics
 ```
-mamba activate base
-mamba create -n some-env -c conda-forge bioconda::snakemake ...
-```
-## Project Structure overview
-
-This project demonstrates a metagenomics analysis pipeline using Snakemake. Below you will find the main components of the pipeline.
-
-
-- **DAG Visualization**: 
-  ![DAG Image](rulegraph.png)
-
-- **Pipeline Script**: 
-  You can find the main pipeline script in the [Snakefile](snakefile).
 
 ## Usage
-To run the pipeline, use the following command (Conda/mamba):
+
+### 1. Configure Pipeline
+Edit `config.yaml` to set your parameters:
+```yaml
+threads:
+  bowtie2: 8
+  spades: 48
+  # ... other parameters
 ```
-snakemake --cores 4
+
+### 2. Prepare Input Data
+- Place paired-end FASTQ files in the working directory
+- Ensure reference databases are available and paths are correctly specified
+
+### 3. Run Pipeline
+```bash
+# Dry run to check workflow
+snakemake -n
+
+# Run pipeline with 4 cores
+snakemake --cores 4 --use-conda
+
+# Run on a cluster (e.g., SLURM)
+snakemake --cluster "sbatch --mem=100g" --jobs 100
 ```
+
+## Pipeline Steps
+
+1. **Host Read Removal**
+   - Maps reads against host genome
+   - Filters unmapped reads for further analysis
+
+2. **Taxonomic Classification**
+   - Kaiju classification of non-host reads
+   - Centrifuge parallel classification
+   - Krona visualization of results
+
+3. **Assembly and Analysis**
+   - MetaSPAdes assembly of filtered reads
+   - Read mapping to assemblies
+   - Coverage analysis
+
+4. **Cytochrome B Analysis**
+   - Extraction of CytB reads
+   - Targeted assembly
+   - Taxonomic assignment
+
+## Output Directory Structure
+```
+├── filtered_reads/           # Host-filtered reads
+├── kaiju_outputs/           # Kaiju classification results
+├── centrifuge_reports/      # Centrifuge classification
+├── metaspades_output/       # Assemblies
+├── krona_charts/           # Interactive visualizations
+└── assembly_stats/         # Assembly statistics
+```
+
+## Troubleshooting
+
+Common issues and solutions:
+1. **Memory Issues**: Adjust memory in config.yaml
+2. **Database Errors**: Verify database paths and formats
+3. **Missing Files**: Check input file naming conventions
+
 ## Contributing
-Please feel free to contribute to this project by submitting issues or pull requests.
+
+1. Fork the repository
+2. Create your feature branch
+3. Submit a pull request
 
 ## License
-This project is licensed under the MIT License.
 
-## Author
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-* Brian M Ogoti
-* Web: [The Center for Epidemiological Modelling and Analysis CEMA](https://cema-africa.uonbi.ac.ke/people/epidemiology/brian-maina) 
-* Twitter: [@diyobraz2](https://x.com/diyobraz2)
 
+## Contact
+
+* **Brian M Ogoti**
+  * Center for Epidemiological Modelling and Analysis (CEMA)
+  * Twitter: [@diyobraz2](https://twitter.com/diyobraz2)
+  * Web: [CEMA Website](URL-to-CEMA)
 
