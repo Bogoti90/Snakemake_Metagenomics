@@ -1,0 +1,9 @@
+# seqtk.yaml
+name: seqtk
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - seqtk=1.4
+
+---

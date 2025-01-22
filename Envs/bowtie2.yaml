@@ -1,0 +1,10 @@
+# bowtie2.yaml
+name: bowtie2
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - bowtie2=2.5.1
+  - perl=5.32.1
+
+---

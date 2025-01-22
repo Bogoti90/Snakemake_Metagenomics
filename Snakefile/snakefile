@@ -1,122 +1,227 @@
+"""
+Metagenomics Analysis Pipeline
+-----------------------------
+This Snakefile implements a comprehensive metagenomics analysis workflow including:
+- Host read removal
+- Taxonomic classification (Kaiju, Centrifuge)
+- Metagenomic assembly (MetaSPAdes)
+- Read mapping and coverage analysis
+- Cytochrome B gene analysis
+
+Requirements:
+- Bowtie2
+- Samtools
+- SPAdes
+- Kaiju
+- Centrifuge
+- Krona
+- seqtk
+
+Input:
+- Paired-end FASTQ files (*_R[12]_001.fastq.gz)
+- Host genome (genome/host.fna)
+- Kaiju database (kaijudb/)
+- Centrifuge database (centrifuge/index/)
+
+Usage:
+    snakemake --cores N --use-conda
+"""
+
+from snakemake.utils import min_version
+min_version("6.0.0")
+
+# Configuration
+configfile: "config.yaml"
+
+# Default parameters (override in config.yaml)
+defaults = {
+    "threads": {
+        "bowtie2_build": 4,
+        "bowtie2": 8,
+        "samtools": 4,
+        "spades": 48,
+        "kaiju": 24,
+        "centrifuge": 34
+    },
+    "memory": {
+        "spades": 132  # GB
+    }
+}
+
+# Merge config with defaults
+config = {**defaults, **config}
+
+# Wildcards
 SAMPLES, = glob_wildcards('{sample}_R1_001.fastq.gz')
 
+# Pipeline targets
 rule all:
     input:
+        # Host removal outputs
         expand("filtered_reads/{sample}_nohost_R1.fastq", sample=SAMPLES),
         expand("filtered_reads/{sample}_nohost_R2.fastq", sample=SAMPLES),
+        # Taxonomic classification
         expand("kaiju_outputs/{sample}_kaiju.output", sample=SAMPLES),
         expand("kaiju_summaries/{sample}_table.tsv", sample=SAMPLES),
+        expand("centrifuge_reports/{sample}_centrifuge_report.tsv", sample=SAMPLES),
+        expand("centrifuge_classifications/{sample}_classification.txt", sample=SAMPLES),
+        # Assembly and mapping
         expand("metaspades_output/{sample}/contigs.fasta", sample=SAMPLES),
-       # expand("metaquast_output/{sample}/report.html", sample=SAMPLES),
         expand("assembly_database/{sample}.1.bt2", sample=SAMPLES),
         expand("mapped_to_assembly/{sample}_sorted.bam", sample=SAMPLES),
         expand("mapped_to_assembly/{sample}_sorted.bam.bai", sample=SAMPLES),
+        # Statistics and visualization
         expand("assembly_stats/{sample}_idxstats.txt", sample=SAMPLES),
-       # expand("assembly_stats/{sample}_counts.txt", sample=SAMPLES),
-        expand("centrifuge_reports/{sample}_centrifuge_report.tsv", sample=SAMPLES),
-        expand("centrifuge_classifications/{sample}_classification.txt", sample=SAMPLES),
+        expand("krona_charts/{sample}_krona.html", sample=SAMPLES),
+        # CytB analysis
+        expand("filtered_reads_cyb/{sample}_host_cyb_R1.fastq", sample=SAMPLES),
+        expand("filtered_reads_cyb/{sample}_host_cyb_R2.fastq", sample=SAMPLES),
+        expand("metaspades_output_cyb/{sample}/contigs.fasta", sample=SAMPLES),
+        # Additional outputs
+        expand("filtered_reads_bam/{sample}.bam.bai", sample=SAMPLES),
         expand("filtered_ids/{sample}_filtered_read_ids.txt", sample=SAMPLES),
-	expand("filtered_reads_cyb/{sample}_host_cyb_R1.fastq", sample=SAMPLES),
-	expand("filtered_reads_cyb/{sample}_host_cyb_R2.fastq", sample=SAMPLES),
-	expand("metaspades_output_cyb/{sample}/contigs.fasta", sample=SAMPLES),
-	expand("filtered_reads_bam/{sample}.bam.bai", sample=SAMPLES),
-	expand("krona_charts/{sample}_krona.html", sample=SAMPLES),
-	expand("extracted_reads/{sample}_R1_extracted_reads.fastq", sample=SAMPLES),
+        expand("extracted_reads/{sample}_R1_extracted_reads.fastq", sample=SAMPLES),
         expand("extracted_reads/{sample}_R2_extracted_reads.fastq", sample=SAMPLES)
-
-# Since the genome is manually downloaded, the download rule is removed.
-
-# Decompression step is removed if your genome is already in .fna (uncompressed) format.
 
 # Build the Bowtie2 database
 rule build_bowtie2_db:
     input:
-    	"genome/host.fna"
+        "genome/host.fna"
     output:
-    	"genome/host.1.bt2"
+        multiext("genome/host", ".1.bt2", ".2.bt2", ".3.bt2", ".4.bt2", ".rev.1.bt2", ".rev.2.bt2")
+    log:
+        "logs/bowtie2_build/host_genome.log"
+    threads: config["threads"]["bowtie2_build"]
+    message: "Building Bowtie2 index for host genome"
+    conda:
+        "envs/bowtie2.yaml"
     shell:
-    	"bowtie2-build {input} genome/host"
+        "(bowtie2-build --threads {threads} {input} genome/host) 2> {log}"
 
-# Map reads against the host database and filter host reads
+# Map reads against the host database
 rule map_reads:
     input:
-    	db="genome/host.1.bt2",
+        db=rules.build_bowtie2_db.output,
         R1="{sample}_R1_001.fastq.gz",
         R2="{sample}_R2_001.fastq.gz"
     output:
-    	sam="mapped_reads/{sample}_host_mapped.sam"
+        sam="mapped_reads/{sample}_host_mapped.sam"
+    log:
+        "logs/bowtie2/{sample}_mapping.log"
+    threads: config["threads"]["bowtie2"]
     params:
         db_prefix="genome/host"
+    conda:
+        "envs/bowtie2.yaml"
+    message: "Mapping {wildcards.sample} against host genome"
     shell:
-    	"bowtie2 --very-sensitive-local -p 8 -x {params.db_prefix} -1 {input.R1} -2 {input.R2} -S {output}"
+        "bowtie2 --very-sensitive-local -p {threads} "
+        "-x {params.db_prefix} -1 {input.R1} -2 {input.R2} "
+        "-S {output.sam} 2> {log}"
 
 # Convert SAM to BAM
 rule sam_to_bam:
     input:
-    	"mapped_reads/{sample}_host_mapped.sam"
+        "mapped_reads/{sample}_host_mapped.sam"
     output:
-    	"mapped_reads/{sample}_host_mapped.bam"
+        "mapped_reads/{sample}_host_mapped.bam"
+    log:
+        "logs/samtools/{sample}_sam_to_bam.log"
+    threads: config["threads"]["samtools"]
+    conda:
+        "envs/samtools.yaml"
+    message: "Converting SAM to BAM for {wildcards.sample}"
     shell:
-    	"samtools view -bS {input} > {output}"
+        "samtools view -@ {threads} -bS {input} > {output} 2> {log}"
 
 # Extract unmapped reads
 rule extract_unmapped_reads:
     input:
-    	"mapped_reads/{sample}_host_mapped.bam"
+        "mapped_reads/{sample}_host_mapped.bam"
     output:
-    	temp("filtered_reads/{sample}_unmapped.bam")
+        temp("filtered_reads/{sample}_unmapped.bam")
+    log:
+        "logs/samtools/{sample}_extract_unmapped.log"
+    threads: config["threads"]["samtools"]
+    conda:
+        "envs/samtools.yaml"
+    message: "Extracting unmapped reads for {wildcards.sample}"
     shell:
-    	"samtools view -b -f 12 -F 256 {input} > {output}"
+        "samtools view -@ {threads} -b -f 12 -F 256 {input} > {output} 2> {log}"
 
 # Sort unmapped reads by name
 rule sort_reads:
     input:
-    	"filtered_reads/{sample}_unmapped.bam"
+        "filtered_reads/{sample}_unmapped.bam"
     output:
-    	"filtered_reads/{sample}_unmapped_sorted.bam"
+        "filtered_reads/{sample}_unmapped_sorted.bam"
+    log:
+        "logs/samtools/{sample}_sort_unmapped.log"
+    threads: config["threads"]["samtools"]
+    conda:
+        "envs/samtools.yaml"
+    message: "Sorting unmapped reads for {wildcards.sample}"
     shell:
-    	"samtools sort -n {input} -o {output}"
+        "samtools sort -@ {threads} -n {input} -o {output} 2> {log}"
 
 # Convert sorted BAM to FastQ
 rule bam_to_fastq:
     input:
-    	"filtered_reads/{sample}_unmapped_sorted.bam"
+        "filtered_reads/{sample}_unmapped_sorted.bam"
     output:
-    	R1="filtered_reads/{sample}_nohost_R1.fastq",
+        R1="filtered_reads/{sample}_nohost_R1.fastq",
         R2="filtered_reads/{sample}_nohost_R2.fastq"
+    log:
+        "logs/samtools/{sample}_bam_to_fastq.log"
+    conda:
+        "envs/samtools.yaml"
+    message: "Converting BAM to FASTQ for {wildcards.sample}"
     shell:
-    	"samtools fastq -1 {output.R1} -2 {output.R2} {input}"
+        "samtools fastq -1 {output.R1} -2 {output.R2} {input} 2> {log}"
 
-#Kaiju
+# Kaiju taxonomic classification
 rule run_kaiju:
     input:
-    	R1="filtered_reads/{sample}_nohost_R1.fastq",
+        R1="filtered_reads/{sample}_nohost_R1.fastq",
         R2="filtered_reads/{sample}_nohost_R2.fastq"
     output:
-    	"kaiju_outputs/{sample}_kaiju.output"
+        "kaiju_outputs/{sample}_kaiju.output"
     params:
-    	kaiju_db_nodes = "kaijudb/nodes.dmp",
-        kaiju_db_fmi = "kaijudb/viruses/kaiju_db_viruses.fmi",
-        threads =24,  # Adjust as needed
-        e_value = "1e-05"
+        nodes="kaijudb/nodes.dmp",
+        db="kaijudb/viruses/kaiju_db_viruses.fmi",
+        evalue="1e-05"
+    log:
+        "logs/kaiju/{sample}.log"
+    threads: config["threads"]["kaiju"]
+    conda:
+        "envs/kaiju.yaml"
+    message: "Running Kaiju classification for {wildcards.sample}"
     shell:
-    	"kaiju -t {params.kaiju_db_nodes} -f {params.kaiju_db_fmi} -i {input.R1} -j {input.R2} -o {output} -z {params.threads} -E {params.e_value} -v"
+        "kaiju -t {params.nodes} -f {params.db} "
+        "-i {input.R1} -j {input.R2} -o {output} "
+        "-z {threads} -E {params.evalue} -v 2> {log}"
 
-#Kaiju summary table
+# Kaiju summary table
 rule kaiju2table_summary:
     input:
-    	"kaiju_outputs/{sample}_kaiju.output"
+        "kaiju_outputs/{sample}_kaiju.output"
     output:
-    	"kaiju_summaries/{sample}_table.tsv"
+        "kaiju_summaries/{sample}_table.tsv"
     params:
-    	kaiju_db_nodes = "kaijudb/nodes.dmp",
-        kaiju_db_names = "kaijudb/names.dmp",
-        taxonomic_level = "species",  # Can be adjusted as needed
-        taxonomic_levels = "superkingdom,phylum,class,order,family,genus,species"  # Adjust as needed
+        nodes="kaijudb/nodes.dmp",
+        names="kaijudb/names.dmp",
+        ranks="superkingdom,phylum,class,order,family,genus,species"
+    log:
+        "logs/kaiju/{sample}_table.log"
+    conda:
+        "envs/kaiju.yaml"
+    message: "Creating Kaiju summary table for {wildcards.sample}"
     shell:
-    	"kaiju2table -t {params.kaiju_db_nodes} -n {params.kaiju_db_names} -r {params.taxonomic_level} -o {output} {input} -l {params.taxonomic_levels}"
+        "kaiju2table -t {params.nodes} -n {params.names} "
+        "-r species -o {output} {input} "
+        "-l {params.ranks} 2> {log}"
 
-#metaspades
+# MetaSPAdes assembly
 rule run_metaspades:
     input:
         R1="filtered_reads/{sample}_nohost_R1.fastq",
@@ -125,32 +230,20 @@ rule run_metaspades:
         contigs="metaspades_output/{sample}/contigs.fasta",
         scaffolds="metaspades_output/{sample}/scaffolds.fasta"
     params:
-        spades_path="spades.py",  # Update with your path to SPAdes
-        threads=48,  # Adjust as needed
-        memory=132,  # Adjust as needed, in GB
-        outdir=lambda wc: "metaspades_output/" + wc.sample  # Dynamically generate output directory path
+        outdir=lambda wc: f"metaspades_output/{wc.sample}",
+        memory=config["memory"]["spades"]
+    log:
+        "logs/spades/{sample}.log"
+    threads: config["threads"]["spades"]
+    conda:
+        "envs/spades.yaml"
+    message: "Running MetaSPAdes assembly for {wildcards.sample}"
     shell:
-        """
-        {params.spades_path} --meta -1 {input.R1} -2 {input.R2} -k 55,75,95 \
-        -t {params.threads} -m {params.memory} -o {params.outdir}
-        """
+        "spades.py --meta -1 {input.R1} -2 {input.R2} "
+        "-k 55,75,95 -t {threads} -m {params.memory} "
+        "-o {params.outdir} 2> {log}"
 
-#metaquast
-rule evaluate_assembly:
-    input:
-        contigs="metaspades_output/{sample}/contigs.fasta"
-    output:
-        report="metaquast_output/{sample}/report.html"
-    params:
-        metaquast_path="metaquast.py",  # Update with your path to metaQUAST
-        min_contig_length=10,  # Update as needed
-        threads=24,  # Adjust as needed
-        outdir=lambda wc: "metaquast_output/" + wc.sample  # Dynamically generate output directory path
-    shell:
-        """
-        {params.metaquast_path} -o {params.outdir} \
-        -m {params.min_contig_length} -t {params.threads} {input.contigs}
-        """
+# Centrifuge classification
 rule run_centrifuge:
     input:
         R1="filtered_reads/{sample}_nohost_R1.fastq",
@@ -159,105 +252,165 @@ rule run_centrifuge:
         report="centrifuge_reports/{sample}_centrifuge_report.tsv",
         classification="centrifuge_classifications/{sample}_classification.txt"
     params:
-        centrifuge_index="centrifuge/index/p_compressed+h+v",  # Update with your path to Centrifuge index
-        centrifuge_path="centrifuge",  # Update with your path to Centrifuge executable
-        threads=34  # Adjust as needed
+        db="centrifuge/index/p_compressed+h+v"
+    log:
+        "logs/centrifuge/{sample}.log"
+    threads: config["threads"]["centrifuge"]
+    conda:
+        "envs/centrifuge.yaml"
+    message: "Running Centrifuge classification for {wildcards.sample}"
     shell:
-        """
-        {params.centrifuge_path} -x {params.centrifuge_index} \
-        -1 {input.R1} -2 {input.R2} \
-        -S {output.classification} \
-        --report-file {output.report} \
-        -p {params.threads} --min-hitlen 15
-        """
+        "centrifuge -x {params.db} -1 {input.R1} -2 {input.R2} "
+        "-S {output.classification} --report-file {output.report} "
+        "-p {threads} --min-hitlen 15 2> {log}"
 
+# Assembly database construction and mapping
 rule build_assembly_database:
     input:
         "metaspades_output/{sample}/contigs.fasta"
     output:
-        "assembly_database/{sample}.1.bt2"
+        multiext("assembly_database/{sample}", ".1.bt2", ".2.bt2", ".3.bt2", ".4.bt2", 
+                ".rev.1.bt2", ".rev.2.bt2")
+    log:
+        "logs/bowtie2_build/{sample}_assembly.log"
     params:
-        seed=4
+        prefix="assembly_database/{sample}"
+    threads: config["threads"]["bowtie2_build"]
+    conda:
+        "envs/bowtie2.yaml"
+    message: "Building Bowtie2 index for {wildcards.sample} assembly"
     shell:
-        "bowtie2-build --seed {params.seed} {input} assembly_database/{wildcards.sample}"
+        "bowtie2-build --threads {threads} {input} {params.prefix} 2> {log}"
+
+# Map reads to assembly
 rule map_reads_to_assembly:
     input:
-        db="assembly_database/{sample}.1.bt2",
+        db=rules.build_assembly_database.output,
         R1="filtered_reads/{sample}_nohost_R1.fastq",
         R2="filtered_reads/{sample}_nohost_R2.fastq"
     output:
         "mapped_to_assembly/{sample}.sam"
+    log:
+        "logs/bowtie2/{sample}_map_to_assembly.log"
     params:
-        threads=24,
-        seed=4,
-        db_prefix="assembly_database/{sample}"
+        prefix="assembly_database/{sample}"
+    threads: config["threads"]["bowtie2"]
+    conda:
+        "envs/bowtie2.yaml"
+    message: "Mapping reads to assembly for {wildcards.sample}"
     shell:
-        "bowtie2 --sensitive-local -p {params.threads} --seed {params.seed} -x {params.db_prefix} -1 {input.R1} -2 {input.R2} -S {output}"
+        "bowtie2 --sensitive-local -p {threads} "
+        "-x {params.prefix} -1 {input.R1} -2 {input.R2} "
+        "-S {output} 2> {log}"
+
+# Index assembly
 rule index_assembly:
     input:
         "metaspades_output/{sample}/contigs.fasta"
     output:
         "metaspades_output/{sample}/contigs.fasta.fai"
+    log:
+        "logs/samtools/{sample}_index_assembly.log"
+    conda:
+        "envs/samtools.yaml"
+    message: "Indexing assembly for {wildcards.sample}"
     shell:
-        "samtools faidx {input}"
+        "samtools faidx {input} 2> {log}"
+
+# Convert assembly SAM to BAM
 rule sam2_to_bam2:
     input:
         sam="mapped_to_assembly/{sample}.sam",
         fai="metaspades_output/{sample}/contigs.fasta.fai"
     output:
-        "mapped_to_assembly/{sample}.bam"
+        temp("mapped_to_assembly/{sample}.bam")
+    log:
+        "logs/samtools/{sample}_assembly_sam_to_bam.log"
+    threads: config["threads"]["samtools"]
+    conda:
+        "envs/samtools.yaml"
+    message: "Converting assembly SAM to BAM for {wildcards.sample}"
     shell:
-        "samtools view -bt {input.fai} {input.sam} > {output}"
+        "samtools view -@ {threads} -bt {input.fai} {input.sam} > {output} 2> {log}"
+
+# Sort BAM file
 rule sort_bam2:
     input:
         "mapped_to_assembly/{sample}.bam"
     output:
         "mapped_to_assembly/{sample}_sorted.bam"
+    log:
+        "logs/samtools/{sample}_sort_assembly_bam.log"
+    threads: config["threads"]["samtools"]
+    conda:
+        "envs/samtools.yaml"
+    message: "Sorting assembly BAM for {wildcards.sample}"
+    resources:
+        mem_mb=8000
     shell:
-        "samtools sort {input} -o {output}"
+        "samtools sort -@ {threads} -m 2G {input} -o {output} 2> {log}"
+
+# Index BAM file
 rule index_bam:
     input:
         "mapped_to_assembly/{sample}_sorted.bam"
     output:
         "mapped_to_assembly/{sample}_sorted.bam.bai"
+    log:
+        "logs/samtools/{sample}_index_assembly_bam.log"
+    conda:
+        "envs/samtools.yaml"
+    message: "Indexing assembly BAM for {wildcards.sample}"
     shell:
-        "samtools index {input}"
+        "samtools index {input} 2> {log}"
+
+# Generate assembly statistics
 rule generate_assembly_stats:
     input:
         "mapped_to_assembly/{sample}_sorted.bam"
     output:
         "assembly_stats/{sample}_idxstats.txt"
+    log:
+        "logs/samtools/{sample}_assembly_stats.log"
+    conda:
+        "envs/samtools.yaml"
+    message: "Generating assembly statistics for {wildcards.sample}"
     shell:
-        "samtools idxstats {input} > {output}"
-rule generate_count_table:
-    input:
-        "assembly_stats/{sample}_idxstats.txt"
-    output:
-        "assembly_stats/{sample}_counts.txt"
-    shell:
-        "python get_count_table.py {input} > {output}"
+        "samtools idxstats {input} > {output} 2> {log}"
 
+# Extract reads aligned to conserved region
 rule extract_aligned_reads_for_mapped_reads:
     input:
         bam="mapped_reads/{sample}_host_mapped.bam"
     output:
         conserved_reads="extracted_reads_cyB/{sample}_conserved_region.bam"
     params:
-        region="conserved_gene_coordinates.bed"  # BED file with coordinates of the conserved region
+        region="conserved_gene_coordinates.bed"
+    log:
+        "logs/samtools/{sample}_extract_conserved.log"
+    threads: config["threads"]["samtools"]
+    conda:
+        "envs/samtools.yaml"
+    message: "Extracting conserved region reads for {wildcards.sample}"
     shell:
-        "samtools view -b {input.bam} -L {params.region} > {output.conserved_reads}"
+        "samtools view -@ {threads} -b {input.bam} -L {params.region} > {output.conserved_reads} 2> {log}"
 
-#metaspades_take two for mapped host reads for extracting cyb gene:)
-# Convert sorted BAM to FastQ
+# Convert BAM to FASTQ for CyB analysis
 rule bam_to_fastq_for_cyb:
     input:
-    	"mapped_reads/{sample}_conserved_region.bam"
+        "mapped_reads/{sample}_conserved_region.bam"
     output:
-    	R1="filtered_reads_cyb/{sample}_host_cyb_R1.fastq",
+        R1="filtered_reads_cyb/{sample}_host_cyb_R1.fastq",
         R2="filtered_reads_cyb/{sample}_host_cyb_R2.fastq"
+    log:
+        "logs/samtools/{sample}_cyb_bam_to_fastq.log"
+    conda:
+        "envs/samtools.yaml"
+    message: "Converting CyB BAM to FASTQ for {wildcards.sample}"
     shell:
-    	"samtools fastq -1 {output.R1} -2 {output.R2} {input}"
+        "samtools fastq -1 {output.R1} -2 {output.R2} {input} 2> {log}"
 
+# MetaSPAdes assembly for CyB reads
 rule run_metaspades_take_two:
     input:
         R1="filtered_reads_cyb/{sample}_host_cyb_R1.fastq",
@@ -266,56 +419,88 @@ rule run_metaspades_take_two:
         contigs="metaspades_output_cyb/{sample}/contigs.fasta",
         scaffolds="metaspades_output_cyb/{sample}/scaffolds.fasta"
     params:
-        spades_path="spades.py",  # Update with your path to SPAdes
-        threads=48,  # Adjust as needed
-        memory=132,  # Adjust as needed, in GB
-        outdir=lambda wc: "metaspades_output_cyb/" + wc.sample  # Dynamically generate output directory path
+        outdir=lambda wc: f"metaspades_output_cyb/{wc.sample}",
+        memory=config["memory"]["spades"]
+    log:
+        "logs/spades/{sample}_cyb.log"
+    threads: config["threads"]["spades"]
+    conda:
+        "envs/spades.yaml"
+    message: "Running MetaSPAdes assembly for CyB reads from {wildcards.sample}"
     shell:
-        """
-        {params.spades_path} --meta -1 {input.R1} -2 {input.R2} -k 55,75,95 \
-        -t {params.threads} -m {params.memory} -o {params.outdir}
-        """
+        "spades.py --meta -1 {input.R1} -2 {input.R2} "
+        "-k 55,75,95 -t {threads} -m {params.memory} "
+        "-o {params.outdir} 2> {log}"
 
+# Create Krona visualization
 rule centrifuge_to_krona:
     input:
         "centrifuge_reports/{sample}_centrifuge_report.tsv"
     output:
         "krona_charts/{sample}_krona.html"
+    log:
+        "logs/krona/{sample}.log"
+    conda:
+        "envs/krona.yaml"
+    message: "Creating Krona chart for {wildcards.sample}"
     shell:
-        "ktImportTaxonomy -q 1 -t 2 -m 7 {input} -o {output}"
+        "ktImportTaxonomy -q 1 -t 2 -m 7 {input} -o {output} 2> {log}"
 
-
+# Index filtered BAM
 rule index_bam2:
     input:
         "filtered_reads/{sample}_unmapped.bam"
     output:
         "filtered_reads_bam/{sample}.bam.bai"
+    log:
+        "logs/samtools/{sample}_index_filtered.log"
+    conda:
+        "envs/samtools.yaml"
+    message: "Indexing filtered BAM for {wildcards.sample}"
     shell:
-        "samtools index {input}"
+        "samtools index {input} 2> {log}"
 
-
+# Filter reads by taxon
 rule filter_reads_by_taxon:
     input:
-        report='centrifuge_reports/{sample}_centrifuge_report.tsv'
+        report="centrifuge_reports/{sample}_centrifuge_report.tsv"
     output:
-        ids='filtered_ids/{sample}_filtered_read_ids.txt'
+        ids="filtered_ids/{sample}_filtered_read_ids.txt"
     params:
-        taxon_of_interest='248061'  # You can adjust this as needed
+        taxon_of_interest=config.get("taxon_of_interest", "248061")
+    log:
+        "logs/scripts/{sample}_filter_taxon.log"
+    conda:
+        "envs/python.yaml"
+    message: "Filtering reads by taxon for {wildcards.sample}"
     script:
-        "python filter_reads_by_taxon.py {input.report} {params.taxon_of_interest} {output.ids}"
+        "scripts/filter_reads_by_taxon.py"
 
-# Rule to extract reads for each sample
+# Extract filtered reads
 rule extract_reads:
     input:
-        ids='filtered_ids/{sample}_filtered_read_ids.txt',
-	r1_fastq="filtered_reads/{sample}_nohost_R1.fastq",
+        ids="filtered_ids/{sample}_filtered_read_ids.txt",
+        r1_fastq="filtered_reads/{sample}_nohost_R1.fastq",
         r2_fastq="filtered_reads/{sample}_nohost_R2.fastq"
     output:
-        r1_fastq='extracted_reads/{sample}_R1_extracted_reads.fastq',
-        r2_fastq='extracted_reads/{sample}_R2_extracted_reads.fastq'
+        r1_fastq="extracted_reads/{sample}_R1_extracted_reads.fastq",
+        r2_fastq="extracted_reads/{sample}_R2_extracted_reads.fastq"
+    log:
+        "logs/seqtk/{sample}_extract.log"
+    conda:
+        "envs/seqtk.yaml"
+    message: "Extracting filtered reads for {wildcards.sample}"
     shell:
         """
-        seqtk subseq {input.r1_fastq} {input.ids} > {output.r1_fastq}
-        seqtk subseq {input.r2_fastq} {input.ids} > {output.r2_fastq}
+        (seqtk subseq {input.r1_fastq} {input.ids} > {output.r1_fastq}
+        seqtk subseq {input.r2_fastq} {input.ids} > {output.r2_fastq}) 2> {log}
         """
 
+# Workflow management
+onsuccess:
+    print("Workflow completed successfully!")
+    shell("mail -s 'Workflow completed' user@example.com < {log}")
+
+onerror:
+    print("An error occurred.")
+    shell("mail -s 'Workflow error' user@example.com < {log}")

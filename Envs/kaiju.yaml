@@ -1,0 +1,10 @@
+# kaiju.yaml
+name: kaiju
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - kaiju=1.9.0
+  - perl=5.32.1
+
+---

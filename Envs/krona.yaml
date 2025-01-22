@@ -1,0 +1,10 @@
+# krona.yaml
+name: krona
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - krona=2.8.1
+  - perl=5.32.1
+
+---
